@@ -4,11 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplikasi Invoice & Kwitansi Anggota</title>
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js & SheetJS -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js & FontAwesome -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="h-full font-sans antialiased text-gray-900" x-data="appState()" x-init="initApp()">
@@ -23,153 +37,114 @@
         };
     </script>
 
-    <!-- SETUP VIEW (Jika belum ada Super Admin) -->
-    <template x-if="needsSetup">
-        <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8 bg-slate-900 h-screen">
-            <div class="sm:mx-auto sm:w-full sm:max-w-md bg-white p-8 rounded-2xl shadow-2xl">
-                <div class="text-center mb-6">
-                    <i class="fa-solid fa-shield-halved text-4xl text-indigo-600 mb-2"></i>
-                    <h2 class="text-2xl font-bold text-gray-900">Setup Super Admin</h2>
-                    <p class="text-sm text-gray-500">Buat akun Administrator Utama</p>
-                </div>
-                <form class="space-y-4" @submit.prevent="setupSuperAdmin">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                        <input type="text" x-model="setupForm.nama" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Username</label>
-                        <input type="text" x-model="setupForm.username" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Email</label>
-                        <input type="email" x-model="setupForm.email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" x-model="setupForm.password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">PIN Admin (Untuk Hapus/Validasi)</label>
-                        <input type="password" x-model="setupForm.pin" maxlength="6" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <button type="submit" class="w-full py-2.5 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700">Simpan & Buat Akun</button>
-                    <div x-show="setupError" class="text-red-500 text-sm text-center mt-2" x-text="setupError"></div>
-                </form>
-            </div>
-        </div>
-    </template>
-
-    <!-- LOGIN VIEW -->
-    <template x-if="!needsSetup && !isLoggedIn">
-        <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8 bg-gradient-to-br from-blue-900 to-indigo-800 h-screen">
-            <div class="sm:mx-auto sm:w-full sm:max-w-sm bg-white p-8 rounded-2xl shadow-2xl">
-                <div class="text-center mb-6">
-                    <i class="fa-solid fa-file-invoice-dollar text-4xl text-indigo-600 mb-2"></i>
-                    <h2 class="text-2xl font-bold text-gray-900">Invoice & Kwitansi Anggota</h2>
-                    <p class="text-sm text-gray-500 mt-1">Silakan masuk ke akun Anda</p>
-                </div>
-                <form class="space-y-4" @submit.prevent="login">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Username atau Email</label>
-                        <input type="text" x-model="loginForm.username" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Password</label>
-                        <input type="password" x-model="loginForm.password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
-                    </div>
-                    <button type="submit" class="w-full py-2.5 px-4 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700">Masuk</button>
-                    <div x-show="loginError" class="text-red-500 text-sm text-center mt-2" x-text="loginError"></div>
-                </form>
-            </div>
-        </div>
-    </template>
-
     <!-- DASHBOARD & MAIN APP -->
-    <div x-show="isLoggedIn" class="flex h-screen overflow-hidden bg-gray-100" style="display: none;">
+    <div class="flex h-screen overflow-hidden bg-gray-100">
         <!-- SIDEBAR -->
-        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col hidden md:flex">
-            <div class="p-4 text-white font-bold text-lg border-b border-slate-800 flex items-center space-x-2">
-                <i class="fa-solid fa-file-invoice text-indigo-400"></i>
+        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col hidden md:flex shadow-lg">
+            <div class="p-5 text-white font-bold text-lg border-b border-slate-800 flex items-center space-x-3">
+                <i class="fa-solid fa-file-invoice-dollar text-indigo-400 text-xl"></i>
                 <span>Portal Anggota</span>
             </div>
-            <nav class="flex-1 overflow-y-auto p-4 space-y-1 text-sm">
-                <a @click="currentTab = 'dashboard'" :class="{'bg-indigo-600 text-white': currentTab === 'dashboard'}" class="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-800 cursor-pointer">
+            <nav class="flex-1 overflow-y-auto p-4 space-y-1 text-sm font-medium">
+                <a @click="currentTab = 'dashboard'" :class="{'bg-indigo-600 text-white shadow': currentTab === 'dashboard'}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 cursor-pointer transition">
                     <i class="fa fa-home w-5"></i><span>Dashboard</span>
                 </a>
-                <div class="pt-4 pb-1 text-xs font-semibold text-slate-500 uppercase">Anggota</div>
-                <a @click="currentTab = 'members'" :class="{'bg-indigo-600 text-white': currentTab === 'members'}" class="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-800 cursor-pointer">
+                <div class="pt-4 pb-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Anggota</div>
+                <a @click="currentTab = 'members'" :class="{'bg-indigo-600 text-white shadow': currentTab === 'members'}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 cursor-pointer transition">
                     <i class="fa fa-users w-5"></i><span>Data Anggota</span>
                 </a>
-                <div class="pt-4 pb-1 text-xs font-semibold text-slate-500 uppercase">Pengaturan</div>
-                <a @click="currentTab = 'audit_logs'" :class="{'bg-indigo-600 text-white': currentTab === 'audit_logs'}" class="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-slate-800 cursor-pointer">
+                <div class="pt-4 pb-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Transaksi</div>
+                <a @click="currentTab = 'invoices'" :class="{'bg-indigo-600 text-white shadow': currentTab === 'invoices'}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 cursor-pointer transition">
+                    <i class="fa fa-file-invoice w-5"></i><span>Invoice</span>
+                </a>
+                <a @click="currentTab = 'receipts'" :class="{'bg-indigo-600 text-white shadow': currentTab === 'receipts'}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 cursor-pointer transition">
+                    <i class="fa fa-receipt w-5"></i><span>Kwitansi</span>
+                </a>
+                <div class="pt-4 pb-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Sistem</div>
+                <a @click="currentTab = 'audit_logs'" :class="{'bg-indigo-600 text-white shadow': currentTab === 'audit_logs'}" class="flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-slate-800 cursor-pointer transition">
                     <i class="fa fa-shield-halved w-5"></i><span>Audit Log</span>
                 </a>
             </nav>
-            <div class="p-4 border-t border-slate-800 flex justify-between items-center text-xs">
-                <div>
-                    <p class="font-semibold text-white" x-text="currentUser.name"></p>
-                    <p class="text-indigo-400" x-text="currentUser.role"></p>
-                </div>
-                <button @click="logout" class="text-red-400 hover:text-red-300"><i class="fa fa-sign-out-alt text-lg"></i></button>
+            <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
+                <span>Aplikasi Invoice & Kwitansi v1.0</span>
             </div>
         </aside>
 
-        <!-- MAIN CONTENT -->
+        <!-- MAIN CONTENT AREA -->
         <div class="flex-1 flex flex-col overflow-y-auto">
-            <header class="bg-white shadow-sm h-16 flex items-center justify-between px-6">
+            <header class="bg-white shadow-sm h-16 flex items-center justify-between px-8">
                 <h1 class="text-xl font-bold text-gray-800 uppercase tracking-wide" x-text="currentTab.replace('_', ' ')"></h1>
+                <div class="flex items-center space-x-2 text-sm text-gray-600 font-semibold">
+                    <i class="fa fa-user-circle text-indigo-600 text-lg"></i>
+                    <span>Administrator</span>
+                </div>
             </header>
-            <main class="p-6">
+
+            <main class="p-8">
                 <!-- TAB: DASHBOARD -->
                 <div x-show="currentTab === 'dashboard'" class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-                            <div class="p-3 bg-blue-100 text-blue-600 rounded-lg"><i class="fa fa-users text-xl"></i></div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                            <div class="p-4 bg-blue-50 text-blue-600 rounded-xl"><i class="fa fa-users text-2xl"></i></div>
                             <div>
-                                <p class="text-sm text-gray-500">Total Anggota</p>
-                                <h3 class="text-2xl font-bold" x-text="stats.totalAnggota || 0">0</h3>
+                                <p class="text-sm font-medium text-gray-500">Total Anggota</p>
+                                <h3 class="text-3xl font-bold text-gray-800" x-text="stats.totalAnggota || 0">0</h3>
                             </div>
                         </div>
-                        <div class="bg-white p-5 rounded-xl shadow border border-gray-100 flex items-center space-x-4">
-                            <div class="p-3 bg-emerald-100 text-emerald-600 rounded-lg"><i class="fa fa-file-invoice-dollar text-xl"></i></div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                            <div class="p-4 bg-emerald-50 text-emerald-600 rounded-xl"><i class="fa fa-file-invoice text-2xl"></i></div>
                             <div>
-                                <p class="text-sm text-gray-500">Total Invoice</p>
-                                <h3 class="text-2xl font-bold" x-text="stats.totalInvoice || 0">0</h3>
+                                <p class="text-sm font-medium text-gray-500">Total Invoice</p>
+                                <h3 class="text-3xl font-bold text-gray-800" x-text="stats.totalInvoice || 0">0</h3>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                            <div class="p-4 bg-amber-50 text-amber-600 rounded-xl"><i class="fa fa-wallet text-2xl"></i></div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Total Pembayaran</p>
+                                <h3 class="text-2xl font-bold text-gray-800" x-text="'Rp ' + (stats.totalPembayaran || 0).toLocaleString('id-ID')">Rp 0</h3>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                            <div class="p-4 bg-purple-50 text-purple-600 rounded-xl"><i class="fa fa-receipt text-2xl"></i></div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Total Kwitansi</p>
+                                <h3 class="text-3xl font-bold text-gray-800" x-text="stats.totalKwitansi || 0">0</h3>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- TAB: ANGGOTA -->
-                <div x-show="currentTab === 'members'" class="space-y-4">
-                    <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow">
-                        <input type="text" x-model="memberSearch" placeholder="Cari Anggota..." class="border rounded-md px-3 py-2 text-sm w-1/3">
-                        <button @click="openMemberModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700"><i class="fa fa-plus mr-2"></i>Tambah Anggota</button>
+                <div x-show="currentTab === 'members'" class="space-y-6">
+                    <div class="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                        <input type="text" x-model="memberSearch" placeholder="Cari Anggota..." class="border rounded-xl px-4 py-2.5 text-sm w-1/3 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <button @click="openMemberModal()" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 shadow transition"><i class="fa fa-plus mr-2"></i>Tambah Anggota</button>
                     </div>
-                    <div class="bg-white rounded-xl shadow overflow-hidden">
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead class="bg-gray-50 text-gray-700">
+                            <thead class="bg-gray-50 text-gray-700 font-semibold">
                                 <tr>
-                                    <th class="px-6 py-3 text-left">Nama</th>
-                                    <th class="px-6 py-3 text-left">Jenis</th>
-                                    <th class="px-6 py-3 text-left">Cabang</th>
-                                    <th class="px-6 py-3 text-left">No. HP / Email</th>
-                                    <th class="px-6 py-3 text-left">Status</th>
-                                    <th class="px-6 py-3 text-right">Aksi</th>
+                                    <th class="px-6 py-4 text-left">Nama</th>
+                                    <th class="px-6 py-4 text-left">Jenis</th>
+                                    <th class="px-6 py-4 text-left">Cabang</th>
+                                    <th class="px-6 py-4 text-left">No. HP / Email</th>
+                                    <th class="px-6 py-4 text-left">Status</th>
+                                    <th class="px-6 py-4 text-right">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200">
                                 <template x-for="m in filteredMembers" :key="m.id">
-                                    <tr>
-                                        <td class="px-6 py-4 font-medium text-gray-900" x-text="m.nama"></td>
-                                        <td class="px-6 py-4" x-text="m.jenis_anggota"></td>
-                                        <td class="px-6 py-4" x-text="m.cabang"></td>
-                                        <td class="px-6 py-4"><span x-text="m.no_hp"></span><br><span class="text-xs text-gray-500" x-text="m.email"></span></td>
+                                    <tr class="hover:bg-gray-50 transition">
+                                        <td class="px-6 py-4 font-semibold text-gray-900" x-text="m.nama"></td>
+                                        <td class="px-6 py-4 text-gray-600" x-text="m.jenis_anggota"></td>
+                                        <td class="px-6 py-4 text-gray-600" x-text="m.cabang"></td>
+                                        <td class="px-6 py-4 text-gray-600"><span x-text="m.no_hp"></span><br><span class="text-xs text-gray-400" x-text="m.email"></span></td>
                                         <td class="px-6 py-4">
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full" :class="m.status === 'Aktif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'" x-text="m.status"></span>
+                                            <span class="px-2.5 py-1 text-xs font-bold rounded-full" :class="m.status === 'Aktif' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'" x-text="m.status"></span>
                                         </td>
-                                        <td class="px-6 py-4 text-right space-x-2">
+                                        <td class="px-6 py-4 text-right space-x-3">
+                                            <button @click="editMember(m)" class="text-blue-600 hover:text-blue-900"><i class="fa fa-edit"></i></button>
                                             <button @click="deleteMember(m.id)" class="text-red-600 hover:text-red-900"><i class="fa fa-trash"></i></button>
                                         </td>
                                     </tr>
@@ -180,25 +155,24 @@
                 </div>
 
                 <!-- TAB: AUDIT LOGS -->
-                <div x-show="currentTab === 'audit_logs'" class="bg-white rounded-xl shadow overflow-hidden p-4">
+                <div x-show="currentTab === 'audit_logs'" class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Aktivitas Sistem (Audit Log)</h3>
                     <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-50">
+                        <thead class="bg-gray-50 text-gray-700">
                             <tr>
-                                <th class="px-4 py-2 text-left">Waktu</th>
-                                <th class="px-4 py-2 text-left">User</th>
-                                <th class="px-4 py-2 text-left">Aksi</th>
-                                <th class="px-4 py-2 text-left">Modul</th>
-                                <th class="px-4 py-2 text-left">Deskripsi</th>
+                                <th class="px-4 py-3 text-left">Waktu</th>
+                                <th class="px-4 py-3 text-left">Aksi</th>
+                                <th class="px-4 py-3 text-left">Modul</th>
+                                <th class="px-4 py-3 text-left">Deskripsi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
                             <template x-for="log in auditLogs">
                                 <tr>
-                                    <td class="px-4 py-2 text-xs text-gray-500" x-text="new Date(log.timestamp).toLocaleString()"></td>
-                                    <td class="px-4 py-2 font-medium" x-text="log.username"></td>
-                                    <td class="px-4 py-2"><span class="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded" x-text="log.action"></span></td>
-                                    <td class="px-4 py-2" x-text="log.module"></td>
-                                    <td class="px-4 py-2 text-gray-600" x-text="log.description"></td>
+                                    <td class="px-4 py-3 text-xs text-gray-500" x-text="new Date(log.timestamp).toLocaleString('id-ID')"></td>
+                                    <td class="px-4 py-3"><span class="px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 rounded-lg" x-text="log.action"></span></td>
+                                    <td class="px-4 py-3 font-medium" x-text="log.module"></td>
+                                    <td class="px-4 py-3 text-gray-600" x-text="log.description"></td>
                                 </tr>
                             </template>
                         </tbody>
@@ -212,76 +186,27 @@
     <script>
         function appState() {
             return {
-                needsSetup: false,
-                isLoggedIn: false,
                 currentTab: 'dashboard',
-                setupForm: { nama: '', username: '', email: '', password: '', pin: '' },
-                setupError: '',
-                loginForm: { username: '', password: '' },
-                loginError: '',
-                currentUser: {},
                 stats: {},
                 members: [],
                 memberSearch: '',
                 auditLogs: [],
                 
-                async initApp() {
-                    const check = await this.callApi('check_setup');
-                    if (check.success && check.needs_setup) {
-                        this.needsSetup = true;
-                        return;
-                    }
-                    const token = localStorage.getItem('app_token');
-                    const user = localStorage.getItem('app_user');
-                    if (token && user) {
-                        this.isLoggedIn = true;
-                        this.currentUser = JSON.parse(user);
-                        this.loadData();
-                    }
+                initApp() {
+                    this.loadData();
                 },
                 
                 async callApi(action, data = {}) {
-                    const token = localStorage.getItem('app_token');
                     try {
                         const res = await fetch(CONFIG.SCRIPT_URL, {
                             method: 'POST',
-                            body: JSON.stringify({ action, token, ...data })
+                            body: JSON.stringify({ action, ...data })
                         });
                         return await res.json();
                     } catch(e) {
                         alert("Gagal menghubungi server Apps Script.");
                         return { success: false };
                     }
-                },
-                
-                async setupSuperAdmin() {
-                    const res = await this.callApi('setup_super_admin', this.setupForm);
-                    if (res.success) {
-                        alert(res.message);
-                        this.needsSetup = false;
-                    } else {
-                        this.setupError = res.message;
-                    }
-                },
-                
-                async login() {
-                    const res = await this.callApi('login', this.loginForm);
-                    if (res.success) {
-                        localStorage.setItem('app_token', res.token);
-                        localStorage.setItem('app_user', JSON.stringify(res.user));
-                        this.isLoggedIn = true;
-                        this.currentUser = res.user;
-                        this.loadData();
-                    } else {
-                        this.loginError = res.message;
-                    }
-                },
-                
-                logout() {
-                    this.callApi('logout');
-                    localStorage.removeItem('app_token');
-                    localStorage.removeItem('app_user');
-                    this.isLoggedIn = false;
                 },
                 
                 loadData() {
@@ -295,11 +220,38 @@
                     return this.members.filter(m => m.nama.toLowerCase().includes(this.memberSearch.toLowerCase()) || m.cabang.toLowerCase().includes(this.memberSearch.toLowerCase()));
                 },
                 
+                openMemberModal() {
+                    let nama = prompt("Nama Anggota:");
+                    if (!nama) return;
+                    let jenis_anggota = prompt("Jenis Anggota (Utama/Madya/Pratama/Kehormatan):", "Utama");
+                    let cabang = prompt("Cabang:", "Pusat Jakarta");
+                    let no_hp = prompt("No. Handphone:", "08123456789");
+                    let email = prompt("Email:", "anggota@email.com");
+                    let alamat = prompt("Alamat:", "Jakarta");
+                    
+                    this.callApi('save_member', { nama, jenis_anggota, status: 'Aktif', cabang, no_hp, email, alamat }).then(res => {
+                        alert(res.message);
+                        this.loadData();
+                    });
+                },
+                
+                editMember(m) {
+                    let nama = prompt("Edit Nama Anggota:", m.nama);
+                    if (!nama) return;
+                    let no_hp = prompt("Edit No HP:", m.no_hp);
+                    let email = prompt("Edit Email:", m.email);
+                    
+                    this.callApi('save_member', { id: m.id, nama, jenis_anggota: m.jenis_anggota, status: m.status, cabang: m.cabang, no_hp, email, alamat: m.alamat }).then(res => {
+                        alert(res.message);
+                        this.loadData();
+                    });
+                },
+                
                 deleteMember(id) {
                     if (confirm("Apakah Anda yakin ingin menghapus data anggota ini?")) {
                         this.callApi('delete_member', { id }).then(res => {
                             alert(res.message);
-                            if (res.success) this.loadData();
+                            this.loadData();
                         });
                     }
                 }
