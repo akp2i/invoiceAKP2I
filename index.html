@@ -1,469 +1,989 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="h-full bg-slate-50">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Invoice & Kwitansi Anggota</title>
+    <title>Aplikasi Invoice & Kwitansi Anggota</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- SweetAlert2 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- SheetJS untuk Excel Import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF & html2canvas untuk Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans">
+<body class="h-full font-sans antialiased text-slate-900 flex flex-col" id="app">
 
     <!-- ============================================================ -->
-    <!-- KONFIGURASI APLIKASI (GOOGLE APPS SCRIPT CONFIGURATION)      -->
+    <!-- KONFIGURASI APLIKASI -->
     <!-- ============================================================ -->
     <script>
         // PASTE URL GOOGLE APPS SCRIPT WEB APP ANDA DI SINI
         const CONFIG = {
-            SCRIPT_URL: "https://script.google.com/macros/s/AKfycbx4YcyIuM-1MnYNmPr36xHOkwGHVr-xTXT1simQQJ5uKKiKaRb2eQMRC2u2xgCuUjU7Gw/exec"
+            SCRIPT_URL: "PASTE_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE"
         };
     </script>
-    <!-- ============================================================ -->
 
     <!-- LOADING OVERLAY -->
-    <div id="loading" class="fixed inset-0 bg-black/60 z-[999] hidden flex items-center justify-center">
-        <div class="bg-white p-4 rounded-xl flex flex-col items-center shadow-lg">
-            <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600 mb-2"></div>
-            <span class="text-sm font-semibold text-slate-600">Memproses...</span>
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-xl shadow-xl flex items-center space-x-4">
+            <i class="fa-solid fa-spinner fa-spin text-indigo-600 text-3xl"></i>
+            <span class="font-medium text-slate-700" id="loading-text">Memproses data...</span>
         </div>
     </div>
 
-    <!-- PUSAT AUTENTIKASI: LOGIN & SETUP -->
-    <div id="authScreen" class="min-h-screen flex items-center justify-center bg-slate-100 hidden">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-            <div class="text-center mb-6">
-                <h1 class="text-3xl font-bold text-slate-800">INV<span class="text-blue-600">KU</span></h1>
-                <p class="text-sm text-slate-500 mt-1">Sistem Manajemen Anggota & Keuangan</p>
-            </div>
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2"></div>
 
-            <!-- Tab Setup / Login -->
-            <div class="flex border-b mb-6 text-sm">
-                <button onclick="toggleAuthTab('login')" id="tabLoginBtn" class="flex-1 pb-2 border-b-2 border-blue-600 font-semibold text-blue-600">Login</button>
-                <button onclick="toggleAuthTab('setup')" id="tabSetupBtn" class="flex-1 pb-2 border-b-2 border-transparent font-medium text-slate-400 hover:text-slate-600">Initial Setup</button>
-            </div>
-
-            <!-- Form Login -->
-            <form id="formLogin" onsubmit="event.preventDefault(); submitLogin();">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-1 text-slate-700">Username / Email</label>
-                    <input type="text" id="loginUsername" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none">
-                </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium mb-1 text-slate-700">Password</label>
-                    <input type="password" id="loginPassword" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none">
-                </div>
-                <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700 transition shadow-md">Masuk</button>
-            </form>
-
-            <!-- Form Setup -->
-            <div id="formSetup" class="hidden">
-                <button onclick="runSetupDatabase()" class="w-full bg-slate-800 text-white font-semibold py-2 rounded-lg hover:bg-slate-900 transition mb-4 shadow text-sm">
-                    <i class="fas fa-database mr-2"></i> 1. Jalankan Setup Database
-                </button>
-                <hr class="mb-4">
-                <form onsubmit="event.preventDefault(); submitSetupAdmin();">
-                    <div class="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <label class="block text-xs font-medium mb-1">Nama Lengkap</label>
-                            <input type="text" id="setupNama" required class="w-full px-3 py-1.5 border rounded text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium mb-1">Username</label>
-                            <input type="text" id="setupUsername" required class="w-full px-3 py-1.5 border rounded text-sm">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="block text-xs font-medium mb-1">Email</label>
-                        <input type="email" id="setupEmail" required class="w-full px-3 py-1.5 border rounded text-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div>
-                            <label class="block text-xs font-medium mb-1">Password</label>
-                            <input type="password" id="setupPassword" required class="w-full px-3 py-1.5 border rounded text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium mb-1 text-red-600">PIN Admin (4-6 Digit)</label>
-                            <input type="password" id="setupPin" required pattern="[0-9]{4,6}" class="w-full px-3 py-1.5 border border-red-300 rounded text-sm outline-none focus:border-red-500">
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition shadow text-sm">
-                        <i class="fas fa-user-shield mr-2"></i> 2. Buat Super Admin
-                    </button>
-                </form>
-            </div>
-        </div>
+    <!-- MAIN APP CONTAINER -->
+    <div class="flex h-full overflow-hidden w-full" id="main-app-container">
+        <!-- Akan dirender dinamis via JS -->
     </div>
 
-    <!-- MAIN APP LAYOUT -->
-    <div id="appScreen" class="flex h-screen overflow-hidden hidden">
-        <!-- Sidebar -->
-        <aside class="w-64 bg-slate-900 text-white flex flex-col transition-all shadow-xl z-20">
-            <div class="h-16 flex items-center justify-center border-b border-slate-800">
-                <h1 class="text-2xl font-bold tracking-wider">INV<span class="text-blue-500">KU</span></h1>
-            </div>
-            <nav class="flex-1 overflow-y-auto py-4 space-y-1 text-sm font-medium">
-                <a href="#" onclick="navigate('dashboard')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                    <i class="fas fa-chart-pie w-6"></i> Dashboard
-                </a>
-                
-                <div class="px-6 py-2 text-xs text-slate-500 font-bold uppercase mt-2">Data Induk</div>
-                <a href="#" onclick="navigate('anggota')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                    <i class="fas fa-users w-6"></i> Data Anggota
-                </a>
-                
-                <div class="px-6 py-2 text-xs text-slate-500 font-bold uppercase mt-2">Transaksi</div>
-                <a href="#" onclick="navigate('invoice')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                    <i class="fas fa-file-invoice w-6"></i> Invoice
-                </a>
-                <a href="#" onclick="navigate('kwitansi')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                    <i class="fas fa-receipt w-6"></i> Kwitansi
-                </a>
-                
-                <div class="admin-only hidden">
-                    <div class="px-6 py-2 text-xs text-slate-500 font-bold uppercase mt-2">Administrasi</div>
-                    <a href="#" onclick="navigate('perusahaan')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                        <i class="fas fa-building w-6"></i> Perusahaan
-                    </a>
-                    <a href="#" onclick="navigate('rekening')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                        <i class="fas fa-university w-6"></i> Rekening
-                    </a>
-                    <a href="#" onclick="navigate('pengaturan')" class="block px-6 py-3 hover:bg-slate-800 text-slate-300 hover:text-white transition">
-                        <i class="fas fa-cogs w-6"></i> Pengaturan
-                    </a>
-                </div>
-            </nav>
-            <div class="p-4 bg-slate-950">
-                <div class="flex items-center mb-3">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm mr-3">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs font-semibold" id="uiUserName">User</p>
-                        <p class="text-[10px] text-slate-400" id="uiUserRole">Role</p>
-                    </div>
-                </div>
-                <button onclick="logout()" class="w-full bg-red-500/10 border border-red-500/30 text-red-400 py-2 rounded text-sm hover:bg-red-500 hover:text-white transition">
-                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
-                </button>
-            </div>
-        </aside>
+    <!-- SCRIPT UTAMA FRONTEND -->
+    <script>
+        // ============================================================
+        // GLOBAL STATE & INITIALIZATION
+        // ============================================================
+        const AppState = {
+            token: localStorage.getItem("app_token") || null,
+            user: JSON.parse(localStorage.getItem("app_user") || "null"),
+            currentMenu: "dashboard",
+            dashboardData: {},
+            anggotaList: [],
+            customFields: [],
+            invoices: [],
+            receipts: [],
+            bankAccounts: [],
+            companySettings: {},
+            users: [],
+            auditLogs: []
+        };
 
-        <!-- Main Content -->
-        <main class="flex-1 flex flex-col h-full bg-slate-50 overflow-hidden relative">
-            <!-- Header Bar -->
-            <header class="h-16 bg-white shadow-sm flex items-center px-8 z-10 justify-between">
-                <h2 class="text-xl font-bold text-slate-700" id="pageTitle">Dashboard</h2>
-                <div class="text-sm text-slate-500" id="currentDate"></div>
-            </header>
+        window.addEventListener("DOMContentLoaded", () => {
+            initApp();
+        });
 
-            <!-- Content Area -->
-            <div class="flex-1 overflow-y-auto p-8">
-                
-                <!-- DASHBOARD VIEW -->
-                <div id="view-dashboard" class="view-section hidden">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                            <div class="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl mr-4"><i class="fas fa-users"></i></div>
+        async function initApp() {
+            if (CONFIG.SCRIPT_URL.includes("PASTE_GOOGLE_APPS_SCRIPT")) {
+                renderSetupConfigError();
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const setupRes = await callAPI("check_setup", "GET");
+                if (setupRes.success && setupRes.data === true) {
+                    renderInitialSetupPage();
+                    showLoading(false);
+                    return;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            showLoading(false);
+            if (!AppState.token || !AppState.user) {
+                renderLoginPage();
+            } else {
+                renderDashboardLayout();
+            }
+        }
+
+        function renderSetupConfigError() {
+            document.getElementById("main-app-container").innerHTML = `
+                <div class="m-auto max-w-lg p-8 bg-white shadow-xl rounded-2xl text-center">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500 text-5xl mb-4"></i>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">Konfigurasi URL Belum Diisi</h2>
+                    <p class="text-slate-600 mb-6">Silakan buka file <code>index.html</code> dan ganti nilai <code>CONFIG.SCRIPT_URL</code> dengan URL Web App Google Apps Script Anda.</p>
+                </div>
+            `;
+        }
+
+        function showLoading(show, text = "Memproses...") {
+            const el = document.getElementById("loading-overlay");
+            document.getElementById("loading-text").innerText = text;
+            if (show) el.classList.remove("hidden");
+            else el.classList.add("hidden");
+        }
+
+        function showToast(message, type = "success") {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            let bg = "bg-emerald-600";
+            let icon = "fa-circle-check";
+            if (type === "error") { bg = "bg-rose-600"; icon = "fa-circle-xmark"; }
+            if (type === "warning") { bg = "bg-amber-600"; icon = "fa-triangle-exclamation"; }
+
+            toast.className = `${bg} text-white px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 transition transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i><span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove("translate-y-2", "opacity-0"), 50);
+            setTimeout(() => {
+                toast.classList.add("translate-y-2", "opacity-0");
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        async function callAPI(action, method = "GET", payload = {}) {
+            let url = CONFIG.SCRIPT_URL + "?action=" + action + "&token=" + (AppState.token || "");
+            let options = { method: method };
+            if (method === "POST") {
+                options.body = JSON.stringify({ action: action, token: AppState.token, data: payload.data || payload, pin: payload.pin || "" });
+            }
+            try {
+                const res = await fetch(url, options);
+                const json = await res.json();
+                if (json.unauthorized) {
+                    handleUnauthorized();
+                    throw new Error("Session berakhir.");
+                }
+                if (!json.success) throw new Error(json.message || "Terjadi kesalahan pada server.");
+                return json;
+            } catch (err) {
+                showToast(err.message, "error");
+                throw err;
+            }
+        }
+
+        function handleUnauthorized() {
+            localStorage.clear();
+            AppState.token = null;
+            AppState.user = null;
+            renderLoginPage();
+            showToast("Session telah berakhir. Silakan login kembali.", "warning");
+        }
+
+        // ============================================================
+        // SETUP AWAL & LOGIN PAGE
+        // ============================================================
+        function renderInitialSetupPage() {
+            document.getElementById("main-app-container").innerHTML = `
+                <div class="m-auto w-full max-w-md p-8 bg-white shadow-2xl rounded-2xl border border-slate-100">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800">Setup Super Admin</h2>
+                        <p class="text-sm text-slate-500 mt-1">Belum ada akun Administrator. Buat Super Admin pertama.</p>
+                    </div>
+                    <form onsubmit="submitInitialSetup(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Lengkap</label>
+                            <input type="text" id="setup-nama" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username</label>
+                            <input type="text" id="setup-username" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email</label>
+                            <input type="email" id="setup-email" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
+                            <input type="password" id="setup-password" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">PIN Admin (Untuk Hapus/Operasi Sensitif)</label>
+                            <input type="password" maxlength="6" id="setup-pin" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="Contoh: 123456">
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition duration-200">Simpan & Buat Super Admin</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        async function submitInitialSetup(e) {
+            e.preventDefault();
+            showLoading(true, "Membuat Super Admin...");
+            try {
+                const payload = {
+                    nama: document.getElementById("setup-nama").value,
+                    username: document.getElementById("setup-username").value,
+                    email: document.getElementById("setup-email").value,
+                    password: document.getElementById("setup-password").value,
+                    pin: document.getElementById("setup-pin").value
+                };
+                const res = await callAPI("setup_superadmin", "POST", payload);
+                showToast(res.message);
+                initApp();
+            } catch (err) {
+                // error handled
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderLoginPage() {
+            document.getElementById("main-app-container").innerHTML = `
+                <div class="m-auto w-full max-w-md p-8 bg-white shadow-2xl rounded-2xl border border-slate-100">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800">Invoice & Kwitansi Anggota</h2>
+                        <p class="text-sm text-slate-500 mt-1">Silakan login untuk masuk ke aplikasi</p>
+                    </div>
+                    <form onsubmit="submitLogin(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Username / Email</label>
+                            <input type="text" id="login-user" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Password</label>
+                            <input type="password" id="login-pass" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition duration-200">Login</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        async function submitLogin(e) {
+            e.preventDefault();
+            showLoading(true, "Autentikasi...");
+            try {
+                const payload = {
+                    username: document.getElementById("login-user").value,
+                    password: document.getElementById("login-pass").value
+                };
+                const res = await callAPI("login", "POST", payload);
+                AppState.token = res.data.token;
+                AppState.user = res.data.user;
+                localStorage.setItem("app_token", AppState.token);
+                localStorage.setItem("app_user", JSON.stringify(AppState.user));
+                showToast("Login berhasil! Selamat datang, " + AppState.user.name);
+                renderDashboardLayout();
+            } catch (err) {
+                // error handled
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function logout() {
+            showLoading(true, "Keluar...");
+            try {
+                await callAPI("logout", "POST", { token: AppState.token });
+            } catch (e) {}
+            localStorage.clear();
+            AppState.token = null;
+            AppState.user = null;
+            showLoading(false);
+            renderLoginPage();
+            showToast("Anda telah keluar.");
+        }
+
+        // ============================================================
+        // DASHBOARD & LAYOUT UTAMA
+        // ============================================================
+        async function renderDashboardLayout() {
+            showLoading(true, "Memuat Dashboard...");
+            try {
+                const [dashRes, anggotaRes, invRes, rcpRes, bankRes, compRes] = await Promise.all([
+                    callAPI("get_dashboard", "GET"),
+                    callAPI("get_anggota", "GET"),
+                    callAPI("get_invoices", "GET"),
+                    callAPI("get_receipts", "GET"),
+                    callAPI("get_bank_accounts", "GET"),
+                    callAPI("get_company_settings", "GET")
+                ]);
+
+                AppState.dashboardData = dashRes.data;
+                AppState.anggotaList = anggotaRes.data;
+                AppState.invoices = invRes.data;
+                AppState.receipts = rcpRes.data;
+                AppState.bankAccounts = bankRes.data;
+                AppState.companySettings = compRes.data;
+            } catch (e) {
+                showLoading(false);
+                return;
+            }
+            showLoading(false);
+
+            const container = document.getElementById("main-app-container");
+            container.innerHTML = `
+                <!-- SIDEBAR -->
+                <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 border-r border-slate-800">
+                    <div class="p-5 flex items-center space-x-3 border-b border-slate-800">
+                        <div class="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow">
+                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-white text-sm">Invoice Anggota</h1>
+                            <span class="text-xs text-slate-400">${AppState.user.role}</span>
+                        </div>
+                    </div>
+                    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-sm">
+                        <a href="#" onclick="switchMenu('dashboard')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'dashboard' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-chart-pie w-5"></i><span>Dashboard</span></a>
+                        
+                        <div class="pt-4 pb-1 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Anggota</div>
+                        <a href="#" onclick="switchMenu('anggota')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'anggota' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-users w-5"></i><span>Data Anggota</span></a>
+                        <a href="#" onclick="switchMenu('import_anggota')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'import_anggota' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-file-excel w-5"></i><span>Import Anggota</span></a>
+
+                        <div class="pt-4 pb-1 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Transaksi</div>
+                        <a href="#" onclick="switchMenu('invoice')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'invoice' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-file-invoice w-5"></i><span>Invoice</span></a>
+                        <a href="#" onclick="switchMenu('kwitansi')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'kwitansi' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-receipt w-5"></i><span>Kwitansi</span></a>
+
+                        <div class="pt-4 pb-1 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pengaturan</div>
+                        <a href="#" onclick="switchMenu('company')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'company' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-building w-5"></i><span>Data Perusahaan</span></a>
+                        <a href="#" onclick="switchMenu('bank')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'bank' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-building-columns w-5"></i><span>Rekening Bank</span></a>
+                        <a href="#" onclick="switchMenu('custom_fields')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'custom_fields' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-list-check w-5"></i><span>Custom Field</span></a>
+
+                        ${AppState.user.role === 'Super Admin' || AppState.user.role === 'Admin' ? `
+                        <div class="pt-4 pb-1 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Administrasi</div>
+                        <a href="#" onclick="switchMenu('users')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'users' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-user-shield w-5"></i><span>Manajemen User</span></a>
+                        <a href="#" onclick="switchMenu('audit')" class="menu-link flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition ${AppState.currentMenu === 'audit' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400'}"><i class="fa-solid fa-clock-rotate-left w-5"></i><span>Audit Log</span></a>
+                        ` : ''}
+                    </nav>
+                    <div class="p-4 border-t border-slate-800">
+                        <button onclick="logout()" class="w-full flex items-center justify-center space-x-2 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white rounded-xl transition text-sm font-medium"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></button>
+                    </div>
+                </aside>
+
+                <!-- MAIN CONTENT AREA -->
+                <div class="flex-1 flex flex-col overflow-hidden">
+                    <!-- TOPBAR -->
+                    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm">
+                        <div class="flex items-center space-x-3">
+                            <h2 class="text-lg font-bold text-slate-800 uppercase tracking-wide" id="page-title">Dashboard</h2>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-user-circle text-indigo-600 mr-2"></i>${AppState.user.name}</span>
+                        </div>
+                    </header>
+
+                    <!-- CONTENT DYNAMIC -->
+                    <main class="flex-1 overflow-y-auto p-6 bg-slate-50" id="main-content">
+                        <!-- Rendered by menu switcher -->
+                    </main>
+                </div>
+            `;
+            renderCurrentMenuContent();
+        }
+
+        function switchMenu(menu) {
+            AppState.currentMenu = menu;
+            document.querySelectorAll(".menu-link").forEach(el => el.classList.remove("bg-indigo-600", "text-white", "font-semibold"));
+            renderDashboardLayout();
+        }
+
+        function renderCurrentMenuContent() {
+            const container = document.getElementById("main-content");
+            document.getElementById("page-title").innerText = AppState.currentMenu.replace("_", " ");
+
+            switch(AppState.currentMenu) {
+                case "dashboard": renderDashboardView(container); break;
+                case "anggota": renderAnggotaView(container); break;
+                case "import_anggota": renderImportAnggotaView(container); break;
+                case "invoice": renderInvoiceView(container); break;
+                case "kwitansi": renderKwitansiView(container); break;
+                case "company": renderCompanyView(container); break;
+                case "bank": renderBankView(container); break;
+                case "custom_fields": renderCustomFieldsView(container); break;
+                case "users": renderUsersView(container); break;
+                case "audit": renderAuditView(container); break;
+                default: container.innerHTML = `<p>Menu belum tersedia.</p>`;
+            }
+        }
+
+        // ============================================================
+        // DASHBOARD VIEW
+        // ============================================================
+        function renderDashboardView(container) {
+            const d = AppState.dashboardData;
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-users"></i></div>
                             <div>
-                                <p class="text-sm text-slate-500 font-medium">Total Anggota</p>
-                                <p class="text-2xl font-bold text-slate-800" id="dashTotalAnggota">0</p>
+                                <p class="text-xs font-semibold uppercase text-slate-400">Total Anggota</p>
+                                <h3 class="text-2xl font-bold text-slate-800">${d.totalAnggota}</h3>
+                                <span class="text-xs text-emerald-600 font-medium">${d.anggotaAktif} Aktif</span>
                             </div>
                         </div>
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                            <div class="w-14 h-14 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center text-2xl mr-4"><i class="fas fa-file-invoice-dollar"></i></div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-file-invoice"></i></div>
                             <div>
-                                <p class="text-sm text-slate-500 font-medium">Invoice Belum Lunas</p>
-                                <p class="text-2xl font-bold text-slate-800" id="dashInvoicePending">0</p>
+                                <p class="text-xs font-semibold uppercase text-slate-400">Total Invoice</p>
+                                <h3 class="text-2xl font-bold text-slate-800">${d.totalInvoice}</h3>
+                                <span class="text-xs text-amber-600 font-medium">${d.invBelumDibayar} Belum Bayar</span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-wallet"></i></div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-400">Total Pembayaran</p>
+                                <h3 class="text-xl font-bold text-slate-800">Rp ${Number(d.totalPembayaran || 0).toLocaleString('id-ID')}</h3>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-receipt"></i></div>
+                            <div>
+                                <p class="text-xs font-semibold uppercase text-slate-400">Total Kwitansi</p>
+                                <h3 class="text-2xl font-bold text-slate-800">${d.totalKwitansi}</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-file-invoice mr-2 text-indigo-600"></i>Invoice Terbaru</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-50 text-slate-600 border-b">
+                                        <tr><th class="p-3">Nomor</th><th class="p-3">Total</th><th class="p-3">Status</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        ${(d.recentInvoices || []).map(i => `
+                                            <tr>
+                                                <td class="p-3 font-medium">${i.nomor_invoice}</td>
+                                                <td class="p-3">Rp ${Number(i.total).toLocaleString('id-ID')}</td>
+                                                <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${i.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${i.status}</span></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 class="font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-receipt mr-2 text-indigo-600"></i>Kwitansi Terbaru</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-slate-50 text-slate-600 border-b">
+                                        <tr><th class="p-3">Nomor</th><th class="p-3">Jumlah</th><th class="p-3">Untuk Pembayaran</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y">
+                                        ${(d.recentReceipts || []).map(r => `
+                                            <tr>
+                                                <td class="p-3 font-medium">${r.nomor_kwitansi}</td>
+                                                <td class="p-3">Rp ${Number(r.jumlah).toLocaleString('id-ID')}</td>
+                                                <td class="p-3">${r.untuk_pembayaran}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                 </div>
+            `;
+        }
 
-                <!-- ANGGOTA VIEW -->
-                <div id="view-anggota" class="view-section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold text-slate-700">Daftar Anggota</h3>
-                        <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition shadow-sm font-medium operator-only">
-                            <i class="fas fa-plus mr-1"></i> Tambah Anggota
-                        </button>
+        // ============================================================
+        // ANGGOTA VIEW & CRUD
+        // ============================================================
+        async function renderAnggotaView(container) {
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <input type="text" id="search-anggota" onkeyup="filterAnggota()" placeholder="Cari nama, email, no HP..." class="px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-72">
+                        </div>
+                        <button onclick="openAnggotaModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow transition"><i class="fa-solid fa-plus mr-2"></i>Tambah Anggota</button>
                     </div>
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
-                            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200">
+                            <thead class="bg-slate-50 text-slate-600 border-b">
                                 <tr>
-                                    <th class="p-4 font-semibold">Nama Anggota</th>
-                                    <th class="p-4 font-semibold">No. HP</th>
-                                    <th class="p-4 font-semibold text-center">Status</th>
+                                    <th class="p-3">Nama</th>
+                                    <th class="p-3">Jenis</th>
+                                    <th class="p-3">Cabang</th>
+                                    <th class="p-3">Kontak</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="tableAnggota" class="divide-y divide-slate-100"></tbody>
+                            <tbody class="divide-y" id="anggota-table-body">
+                                ${AppState.anggotaList.map(a => `
+                                    <tr>
+                                        <td class="p-3 font-semibold text-slate-800">${a.nama}</td>
+                                        <td class="p-3"><span class="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs">${a.jenis_anggota}</span></td>
+                                        <td class="p-3">${a.cabang}</td>
+                                        <td class="p-3">${a.no_handphone}<br><span class="text-xs text-slate-400">${a.email}</span></td>
+                                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${a.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">${a.status}</span></td>
+                                        <td class="p-3 text-right space-x-2">
+                                            <button onclick="editAnggota('${a.id}')" class="text-indigo-600 hover:text-indigo-800"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            <button onclick="deleteAnggotaPrompt('${a.id}')" class="text-rose-600 hover:text-rose-800"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- INVOICE VIEW -->
-                <div id="view-invoice" class="view-section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold text-slate-700">Manajemen Invoice</h3>
-                        <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition shadow-sm font-medium operator-only">
-                            <i class="fas fa-plus mr-1"></i> Buat Invoice
-                        </button>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center text-slate-500">
-                        Belum ada data Invoice.
-                    </div>
-                </div>
-
-                <!-- KWITANSI VIEW -->
-                <div id="view-kwitansi" class="view-section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold text-slate-700">Daftar Kwitansi</h3>
-                        <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition shadow-sm font-medium operator-only">
-                            <i class="fas fa-plus mr-1"></i> Buat Kwitansi Manual
-                        </button>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center text-slate-500">
-                        Belum ada data Kwitansi.
-                    </div>
-                </div>
-
-                <!-- PERUSAHAAN VIEW -->
-                <div id="view-perusahaan" class="view-section hidden">
-                    <h3 class="text-lg font-bold text-slate-700 mb-6">Profil Perusahaan/Organisasi</h3>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <p class="text-sm text-slate-500 mb-4">Pengaturan profil perusahaan untuk Kop Surat dan Invoice.</p>
-                        <!-- Form placeholder -->
-                        <div class="grid grid-cols-2 gap-4">
-                            <input type="text" placeholder="Nama Perusahaan" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none">
-                            <input type="text" placeholder="NPWP" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 outline-none">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- REKENING VIEW -->
-                <div id="view-rekening" class="view-section hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold text-slate-700">Rekening Pembayaran</h3>
-                        <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition shadow-sm font-medium admin-only">
-                            <i class="fas fa-plus mr-1"></i> Tambah Rekening
-                        </button>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center text-slate-500">
-                        Belum ada data rekening terdaftar.
-                    </div>
-                </div>
-
-                <!-- PENGATURAN VIEW -->
-                <div id="view-pengaturan" class="view-section hidden">
-                    <h3 class="text-lg font-bold text-slate-700 mb-6">Pengaturan Sistem</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition">
-                            <h4 class="font-bold text-slate-800"><i class="fas fa-file-code text-blue-500 mr-2"></i> Custom Fields</h4>
-                            <p class="text-xs text-slate-500 mt-1">Kelola isian tambahan form anggota.</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 cursor-pointer hover:border-blue-500 transition">
-                            <h4 class="font-bold text-slate-800"><i class="fas fa-paint-brush text-blue-500 mr-2"></i> Template Dokumen</h4>
-                            <p class="text-xs text-slate-500 mt-1">Ubah desain Invoice & Kwitansi.</p>
-                        </div>
+                <!-- MODAL ANGGOTA -->
+                <div id="anggota-modal" class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center hidden">
+                    <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4" id="anggota-modal-title">Tambah Anggota Baru</h3>
+                        <form onsubmit="saveAnggotaSubmit(event)" class="space-y-4">
+                            <input type="hidden" id="form-anggota-id">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Lengkap</label>
+                                <input type="text" id="form-anggota-nama" required class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Jenis Anggota</label>
+                                    <select id="form-anggota-jenis" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                        <option value="Utama">Utama</option>
+                                        <option value="Madya">Madya</option>
+                                        <option value="Pratama">Pratama</option>
+                                        <option value="Kehormatan">Kehormatan</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Status</label>
+                                    <select id="form-anggota-status" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                        <option value="Aktif">Aktif</option>
+                                        <option value="Tidak Aktif">Tidak Aktif</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Cabang</label>
+                                    <input type="text" id="form-anggota-cabang" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">No Handphone</label>
+                                    <input type="text" id="form-anggota-hp" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Email</label>
+                                <input type="email" id="form-anggota-email" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Alamat</label>
+                                <textarea id="form-anggota-alamat" rows="2" class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t">
+                                <button type="button" onclick="closeAnggotaModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold">Batal</button>
+                                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow">Simpan</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
-
-            </div>
-        </main>
-    </div>
-
-    <!-- MODAL PIN -->
-    <div id="modalPin" class="fixed inset-0 bg-black/60 z-[1000] hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="bg-white p-6 rounded-2xl shadow-2xl w-96 border border-slate-100 transform transition-transform scale-100">
-            <div class="text-center mb-5">
-                <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xl mx-auto mb-3">
-                    <i class="fas fa-shield-alt"></i>
-                </div>
-                <h3 class="text-lg font-bold text-slate-800">Autentikasi Keamanan</h3>
-            </div>
-            <input type="password" id="inputAdminPin" class="w-full px-4 py-3 border border-slate-300 rounded-xl mb-6 text-center tracking-[0.5em] text-xl font-mono focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500" placeholder="••••">
-            <div class="flex space-x-3">
-                <button onclick="hideModal('modalPin')" class="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition">Batal</button>
-                <button id="btnConfirmPin" class="flex-1 px-4 py-2.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition shadow-md">Konfirmasi</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const APP = {
-            token: localStorage.getItem('inv_token') || null,
-            user: JSON.parse(localStorage.getItem('inv_user')) || null,
-            pinCallback: null
-        };
-
-        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-        async function api(action, payload = {}) {
-            if (!CONFIG.SCRIPT_URL.startsWith("http")) return { success: false };
-            showLoading(true);
-            try {
-                const req = await fetch(CONFIG.SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: action, token: APP.token, data: payload })
-                });
-                const res = await req.json();
-                showLoading(false);
-                if (res.message && res.message.includes("Session expired")) {
-                    clearSession();
-                    init();
-                    Swal.fire('Sesi Habis', 'Sesi Anda telah berakhir, silakan login ulang.', 'warning');
-                }
-                return res;
-            } catch (error) {
-                showLoading(false);
-                return { success: false, message: error.message };
-            }
+            `;
         }
 
-        // ============================================================
-        // SETUP DATABASE & LOGIN
-        // ============================================================
-        function toggleAuthTab(tab) {
-            document.getElementById('formLogin').classList.add('hidden');
-            document.getElementById('formSetup').classList.add('hidden');
-            document.getElementById('tabLoginBtn').className = "flex-1 pb-2 border-b-2 border-transparent font-medium text-slate-400";
-            document.getElementById('tabSetupBtn').className = "flex-1 pb-2 border-b-2 border-transparent font-medium text-slate-400";
-            
-            if(tab === 'login') {
-                document.getElementById('formLogin').classList.remove('hidden');
-                document.getElementById('tabLoginBtn').className = "flex-1 pb-2 border-b-2 border-blue-600 font-semibold text-blue-600";
-            } else {
-                document.getElementById('formSetup').classList.remove('hidden');
-                document.getElementById('tabSetupBtn').className = "flex-1 pb-2 border-b-2 border-blue-600 font-semibold text-blue-600";
-            }
+        function openAnggotaModal() {
+            document.getElementById("form-anggota-id").value = "";
+            document.getElementById("form-anggota-nama").value = "";
+            document.getElementById("form-anggota-cabang").value = "";
+            document.getElementById("form-anggota-hp").value = "";
+            document.getElementById("form-anggota-email").value = "";
+            document.getElementById("form-anggota-alamat").value = "";
+            document.getElementById("anggota-modal").classList.remove("hidden");
         }
 
-        async function runSetupDatabase() {
-            Swal.fire({ title: 'Menyiapkan...', didOpen: () => Swal.showLoading() });
-            const res = await api('setupDatabase');
-            res.success ? Swal.fire('Berhasil!', res.message, 'success') : Swal.fire('Gagal', res.message, 'error');
+        function closeAnggotaModal() {
+            document.getElementById("anggota-modal").classList.add("hidden");
         }
 
-        async function submitSetupAdmin() {
-            const data = {
-                nama: document.getElementById('setupNama').value,
-                username: document.getElementById('setupUsername').value,
-                email: document.getElementById('setupEmail').value,
-                password: document.getElementById('setupPassword').value,
-                pin: document.getElementById('setupPin').value,
+        function editAnggota(id) {
+            const a = AppState.anggotaList.find(x => x.id === id);
+            if (!a) return;
+            document.getElementById("form-anggota-id").value = a.id;
+            document.getElementById("form-anggota-nama").value = a.nama;
+            document.getElementById("form-anggota-jenis").value = a.jenis_anggota;
+            document.getElementById("form-anggota-status").value = a.status;
+            document.getElementById("form-anggota-cabang").value = a.cabang;
+            document.getElementById("form-anggota-hp").value = a.no_handphone;
+            document.getElementById("form-anggota-email").value = a.email;
+            document.getElementById("form-anggota-alamat").value = a.alamat;
+            document.getElementById("anggota-modal").classList.remove("hidden");
+        }
+
+        async function saveAnggotaSubmit(e) {
+            e.preventDefault();
+            showLoading(true, "Menyimpan Anggota...");
+            const payload = {
+                id: document.getElementById("form-anggota-id").value,
+                nama: document.getElementById("form-anggota-nama").value,
+                jenis_anggota: document.getElementById("form-anggota-jenis").value,
+                status: document.getElementById("form-anggota-status").value,
+                cabang: document.getElementById("form-anggota-cabang").value,
+                no_handphone: document.getElementById("form-anggota-hp").value,
+                email: document.getElementById("form-anggota-email").value,
+                alamat: document.getElementById("form-anggota-alamat").value
             };
-            const res = await api('setupAdmin', data);
-            if(res.success) {
-                Swal.fire('Sukses', res.message, 'success').then(() => toggleAuthTab('login'));
-            } else {
-                Swal.fire('Gagal', res.message, 'error');
-            }
+            try {
+                const res = await callAPI("save_anggota", "POST", payload);
+                showToast(res.message);
+                closeAnggotaModal();
+                const anggotaRes = await callAPI("get_anggota", "GET");
+                AppState.anggotaList = anggotaRes.data;
+                renderCurrentMenuContent();
+            } catch (err) {} finally { showLoading(false); }
         }
 
-        async function submitLogin() {
-            const u = document.getElementById('loginUsername').value;
-            const p = document.getElementById('loginPassword').value;
-            const res = await api('login', { username: u, password: p });
-            if (res.success) {
-                localStorage.setItem('inv_token', res.token);
-                localStorage.setItem('inv_user', JSON.stringify(res.user));
-                APP.token = res.token; APP.user = res.user;
-                init();
-            } else {
-                Swal.fire('Login Gagal', res.message, 'error');
-            }
+        function deleteAnggotaPrompt(id) {
+            const pin = prompt("Masukkan PIN Admin untuk menghapus data Anggota ini:");
+            if (!pin) return;
+            executeDeleteAnggota(id, pin);
         }
 
-        function clearSession() { localStorage.removeItem('inv_token'); localStorage.removeItem('inv_user'); APP.token = null; APP.user = null; }
-        async function logout() { await api('logout'); clearSession(); window.location.reload(); }
+        async function executeDeleteAnggota(id, pin) {
+            showLoading(true, "Menghapus...");
+            try {
+                const res = await callAPI("delete_anggota", "POST", { id: id, pin: pin });
+                showToast(res.message);
+                const anggotaRes = await callAPI("get_anggota", "GET");
+                AppState.anggotaList = anggotaRes.data;
+                renderCurrentMenuContent();
+            } catch (e) {} finally { showLoading(false); }
+        }
 
         // ============================================================
-        // NAVIGATION & UI
+        // IMPORT ANGGOTA DARI EXCEL
         // ============================================================
-        function init() {
-            if (!APP.token) {
-                document.getElementById('authScreen').classList.remove('hidden');
-                document.getElementById('appScreen').classList.add('hidden');
-                return;
-            }
-            
-            document.getElementById('authScreen').classList.add('hidden');
-            document.getElementById('appScreen').classList.remove('hidden');
-            document.getElementById('uiUserName').innerText = APP.user.name;
-            document.getElementById('uiUserRole').innerText = APP.user.role;
-            
-            document.querySelectorAll('.admin-only').forEach(el => {
-                (APP.user.role === 'Super Admin' || APP.user.role === 'Admin') ? el.classList.remove('hidden') : el.classList.add('hidden');
-            });
-            document.querySelectorAll('.operator-only').forEach(el => {
-                (APP.user.role === 'Viewer') ? el.classList.add('hidden') : el.classList.remove('hidden');
-            });
-
-            navigate('dashboard');
+        function renderImportAnggotaView(container) {
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 max-w-2xl mx-auto space-y-6">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                            <i class="fa-solid fa-file-excel"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800">Import Data Anggota dari Excel</h3>
+                        <p class="text-sm text-slate-500 mt-1">Upload file XLSX atau CSV sesuai format standar</p>
+                    </div>
+                    <div class="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center hover:border-indigo-500 transition cursor-pointer" onclick="document.getElementById('excel-file-input').click()">
+                        <i class="fa-solid fa-cloud-arrow-up text-indigo-600 text-4xl mb-3"></i>
+                        <p class="text-sm font-semibold text-slate-700">Klik untuk upload file Excel</p>
+                        <input type="file" id="excel-file-input" accept=".xlsx, .csv" class="hidden" onchange="handleExcelUpload(event)">
+                    </div>
+                </div>
+            `;
         }
 
-        function navigate(view) {
-            const targetView = document.getElementById('view-' + view);
-            
-            // Pengamanan Logika: Jika halaman belum dibuat secara fisik, beri peringatan daripada menyebabkan error
-            if (!targetView) {
-                Swal.fire('Info', 'Modul ' + view.toUpperCase() + ' sedang dalam pengembangan.', 'info');
-                return;
-            }
-
-            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            targetView.classList.remove('hidden');
-            document.getElementById('pageTitle').innerText = view.charAt(0).toUpperCase() + view.slice(1);
-            
-            // Pemanggilan Data
-            if (view === 'dashboard') loadDashboard();
-            if (view === 'anggota') loadDataAnggota();
-            // Data untuk menu lainnya dapat dipanggil di sini jika endpoint Apps Script sudah siap
-        }
-
-        const showLoading = (st) => document.getElementById('loading').classList[st ? 'remove' : 'add']('hidden');
-        const showModal = (id) => document.getElementById(id).classList.remove('hidden');
-        const hideModal = (id) => document.getElementById(id).classList.add('hidden');
-
-        // ============================================================
-        // DATA LOADERS
-        // ============================================================
-        async function loadDashboard() {
-            const res = await api('getDashboard');
-            if (res.success) {
-                document.getElementById('dashTotalAnggota').innerText = res.data.totalAnggota || 0;
-                document.getElementById('dashInvoicePending').innerText = res.data.invBelumDibayar || 0;
-            }
-        }
-
-        async function loadDataAnggota() {
-            const res = await api('getAnggota');
-            if (res.success) {
-                const tbody = document.getElementById('tableAnggota');
-                tbody.innerHTML = '';
-                if(res.data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" class="p-6 text-center text-slate-400">Belum ada data Anggota</td></tr>`;
-                    return;
+        function handleExcelUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.SheetNames[0];
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                
+                showLoading(true, "Mengimport data...");
+                let successCount = 0;
+                for (let r of rows) {
+                    try {
+                        await callAPI("save_anggota", "POST", {
+                            nama: r.Nama || r.nama || "Tanpa Nama",
+                            jenis_anggota: r.Jenis || "Utama",
+                            status: r.Status || "Aktif",
+                            cabang: r.Cabang || "",
+                            no_handphone: String(r.NoHP || r.Telepon || ""),
+                            email: r.Email || "",
+                            alamat: r.Alamat || ""
+                        });
+                        successCount++;
+                    } catch (err) {}
                 }
-                res.data.forEach(a => {
-                    const stColor = a.status.toLowerCase() === 'aktif' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
-                    tbody.innerHTML += `
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="p-4 font-medium text-slate-800">${a.nama}</td>
-                            <td class="p-4 text-slate-500">${a.no_hp}</td>
-                            <td class="p-4 text-center"><span class="px-3 py-1 ${stColor} rounded-full text-[11px] font-bold uppercase">${a.status}</span></td>
-                        </tr>
-                    `;
-                });
-            }
+                showLoading(false);
+                showToast(`Import selesai! Berhasil menyimpan ${successCount} data.`);
+                const anggotaRes = await callAPI("get_anggota", "GET");
+                AppState.anggotaList = anggotaRes.data;
+                switchMenu('anggota');
+            };
+            reader.readAsArrayBuffer(file);
         }
 
-        window.onload = init;
+        // ============================================================
+        // INVOICE & PEMBAYARAN VIEW
+        // ============================================================
+        async function renderInvoiceView(container) {
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-slate-800">Daftar Invoice Anggota</h3>
+                        <button onclick="openInvoiceModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow transition"><i class="fa-solid fa-plus mr-2"></i>Buat Invoice</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-slate-600 border-b">
+                                <tr>
+                                    <th class="p-3">Nomor Invoice</th>
+                                    <th class="p-3">Tanggal</th>
+                                    <th class="p-3">Total</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                ${AppState.invoices.map(i => `
+                                    <tr>
+                                        <td class="p-3 font-semibold text-slate-800">${i.nomor_invoice}</td>
+                                        <td class="p-3">${i.tanggal}</td>
+                                        <td class="p-3 font-semibold">Rp ${Number(i.total).toLocaleString('id-ID')}</td>
+                                        <td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${i.status === 'Dibayar' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${i.status}</span></td>
+                                        <td class="p-3 text-right space-x-2">
+                                            ${i.status !== 'Dibayar' ? `<button onclick="payInvoice('${i.id}')" class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-semibold">Bayar</button>` : ''}
+                                            <button onclick="downloadPDFInvoice('${i.id}')" class="text-indigo-600 hover:text-indigo-800"><i class="fa-solid fa-file-pdf"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- MODAL INVOICE -->
+                <div id="invoice-modal" class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center hidden">
+                    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[90vh]">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Buat Invoice Baru</h3>
+                        <form onsubmit="saveInvoiceSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Pilih Anggota</label>
+                                <select id="inv-anggota-id" required class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                    ${AppState.anggotaList.map(a => `<option value="${a.id}">${a.nama} (${a.cabang || 'Pusat'})</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Tanggal</label>
+                                    <input type="date" id="inv-tanggal" required class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500" value="${new Date().toISOString().split('T')[0]}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Jatuh Tempo</label>
+                                    <input type="date" id="inv-jatuh-tempo" required class="w-full px-4 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-2">Item Tagihan</label>
+                                <div id="invoice-items-container" class="space-y-2">
+                                    <div class="flex space-x-2 item-row">
+                                        <input type="text" placeholder="Deskripsi Item" class="flex-1 px-3 py-2 border rounded-xl text-sm item-desc" required>
+                                        <input type="number" placeholder="Qty" value="1" min="1" class="w-20 px-3 py-2 border rounded-xl text-sm item-qty" onchange="calculateInvoiceTotal()" required>
+                                        <input type="number" placeholder="Harga Satuan" class="w-36 px-3 py-2 border rounded-xl text-sm item-price" onchange="calculateInvoiceTotal()" required>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="addInvoiceItemRow()" class="mt-2 text-indigo-600 hover:text-indigo-800 text-xs font-semibold"><i class="fa-solid fa-plus mr-1"></i>Tambah Baris</button>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-xl flex justify-between items-center">
+                                <span class="font-semibold text-slate-700">Total Invoice:</span>
+                                <span class="text-xl font-bold text-indigo-600" id="inv-total-display">Rp 0</span>
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t">
+                                <button type="button" onclick="closeInvoiceModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold">Batal</button>
+                                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow">Simpan & Buat</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openInvoiceModal() {
+            document.getElementById("invoice-modal").classList.remove("hidden");
+        }
+        function closeInvoiceModal() {
+            document.getElementById("invoice-modal").classList.add("hidden");
+        }
+
+        function addInvoiceItemRow() {
+            const container = document.getElementById("invoice-items-container");
+            const div = document.createElement("div");
+            div.className = "flex space-x-2 item-row";
+            div.innerHTML = `
+                <input type="text" placeholder="Deskripsi Item" class="flex-1 px-3 py-2 border rounded-xl text-sm item-desc" required>
+                <input type="number" placeholder="Qty" value="1" min="1" class="w-20 px-3 py-2 border rounded-xl text-sm item-qty" onchange="calculateInvoiceTotal()" required>
+                <input type="number" placeholder="Harga Satuan" class="w-36 px-3 py-2 border rounded-xl text-sm item-price" onchange="calculateInvoiceTotal()" required>
+            `;
+            container.appendChild(div);
+        }
+
+        function calculateInvoiceTotal() {
+            let total = 0;
+            document.querySelectorAll(".item-row").forEach(row => {
+                const qty = Number(row.querySelector(".item-qty").value) || 0;
+                const price = Number(row.querySelector(".item-price").value) || 0;
+                total += qty * price;
+            });
+            document.getElementById("inv-total-display").innerText = "Rp " + total.toLocaleString('id-ID');
+        }
+
+        async function saveInvoiceSubmit(e) {
+            e.preventDefault();
+            showLoading(true, "Menyimpan Invoice...");
+            let items = [];
+            let subtotal = 0;
+            document.querySelectorAll(".item-row").forEach(row => {
+                const desc = row.querySelector(".item-desc").value;
+                const qty = Number(row.querySelector(".item-qty").value);
+                const price = Number(row.querySelector(".item-price").value);
+                const sub = qty * price;
+                subtotal += sub;
+                items.push({ deskripsi: desc, qty: qty, harga_satuan: price, subtotal: sub });
+            });
+
+            const payload = {
+                anggota_id: document.getElementById("inv-anggota-id").value,
+                tanggal: document.getElementById("inv-tanggal").value,
+                jatuh_tempo: document.getElementById("inv-jatuh-tempo").value,
+                subtotal: subtotal,
+                diskon: 0,
+                pajak: 0,
+                total: subtotal,
+                rekening_id: AppState.bankAccounts[0] ? AppState.bankAccounts[0].id : "",
+                catatan: "Terima kasih atas kontribusi Anda.",
+                items: items
+            };
+
+            try {
+                const res = await callAPI("save_invoice", "POST", payload);
+                showToast(res.message);
+                closeInvoiceModal();
+                const invRes = await callAPI("get_invoices", "GET");
+                AppState.invoices = invRes.data;
+                renderCurrentMenuContent();
+            } catch (err) {} finally { showLoading(false); }
+        }
+
+        async function payInvoice(id) {
+            showLoading(true, "Memproses Pembayaran & Kwitansi...");
+            try {
+                const rekeningId = AppState.bankAccounts[0] ? AppState.bankAccounts[0].id : "";
+                const res = await callAPI("pay_invoice", "POST", { id: id, rekening_id: rekeningId });
+                showToast(res.message);
+                const [invRes, rcpRes] = await Promise.all([callAPI("get_invoices", "GET"), callAPI("get_receipts", "GET")]);
+                AppState.invoices = invRes.data;
+                AppState.receipts = rcpRes.data;
+                renderCurrentMenuContent();
+            } catch (err) {} finally { showLoading(false); }
+        }
+
+        function downloadPDFInvoice(id) {
+            const inv = AppState.invoices.find(x => x.id === id);
+            if (!inv) return;
+            const doc = new jspdf.jsPDF();
+            doc.text("INVOICE ANGGOTA", 14, 20);
+            doc.text("Nomor: " + inv.nomor_invoice, 14, 30);
+            doc.text("Tanggal: " + inv.tanggal, 14, 38);
+            doc.text("Total: Rp " + Number(inv.total).toLocaleString('id-ID'), 14, 46);
+            doc.text("Status: " + inv.status, 14, 54);
+            doc.save(inv.nomor_invoice.replace(/\//g, '_') + ".pdf");
+        }
+
+        // ============================================================
+        // KWITANSI VIEW
+        // ============================================================
+        function renderKwitansiView(container) {
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-slate-800">Daftar Kwitansi Pembayaran</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-slate-600 border-b">
+                                <tr><th class="p-3">Nomor Kwitansi</th><th class="p-3">Nomor Invoice</th><th class="p-3">Jumlah</th><th class="p-3">Terbilang</th></tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                ${AppState.receipts.map(r => `
+                                    <tr>
+                                        <td class="p-3 font-semibold text-slate-800">${r.nomor_kwitansi}</td>
+                                        <td class="p-3">${r.nomor_invoice || '-'}</td>
+                                        <td class="p-3 font-semibold">Rp ${Number(r.jumlah).toLocaleString('id-ID')}</td>
+                                        <td class="p-3 text-xs italic text-slate-600">${r.terbilang}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // PENGATURAN LAINNYA (COMPANY, BANK, USERS, AUDIT)
+        // ============================================================
+        function renderCompanyView(container) {
+            const c = AppState.companySettings || {};
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 max-w-2xl mx-auto space-y-6">
+                    <h3 class="font-bold text-slate-800 text-lg">Pengaturan Data Perusahaan / Organisasi</h3>
+                    <form onsubmit="saveCompanySubmit(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Nama Organisasi</label>
+                            <input type="text" id="comp-nama" value="${c.nama_perusahaan || ''}" required class="w-full px-4 py-2 border rounded-xl text-sm outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Kota</label>
+                                <input type="text" id="comp-kota" value="${c.kota || ''}" class="w-full px-4 py-2 border rounded-xl text-sm outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">No Telepon</label>
+                                <input type="text" id="comp-telp" value="${c.no_telepon || ''}" class="w-full px-4 py-2 border rounded-xl text-sm outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold uppercase text-slate-600 mb-1">Alamat</label>
+                            <textarea id="comp-alamat" rows="2" class="w-full px-4 py-2 border rounded-xl text-sm outline-none">${c.alamat || ''}</textarea>
+                        </div>
+                        <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow">Simpan Perubahan</button>
+                    </form>
+                </div>
+            `;
+        }
+
+        async function saveCompanySubmit(e) {
+            e.preventDefault();
+            showLoading(true, "Menyimpan Data Perusahaan...");
+            try {
+                const payload = {
+                    nama_perusahaan: document.getElementById("comp-nama").value,
+                    kota: document.getElementById("comp-kota").value,
+                    no_telepon: document.getElementById("comp-telp").value,
+                    alamat: document.getElementById("comp-alamat").value
+                };
+                const res = await callAPI("save_company_settings", "POST", payload);
+                showToast(res.message);
+            } catch (err) {} finally { showLoading(false); }
+        }
+
+        function renderBankView(container) {
+            container.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-6">
+                    <h3 class="font-bold text-slate-800">Daftar Rekening Bank</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-slate-600 border-b">
+                                <tr><th class="p-3">Bank</th><th class="p-3">Nomor Rekening</th><th class="p-3">Atas Nama</th></tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                ${AppState.bankAccounts.map(b => `
+                                    <tr><td class="p-3 font-semibold">${b.nama_bank}</td><td class="p-3">${b.nomor_rekening}</td><td class="p-3">${b.atas_nama}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCustomFieldsView(container) {
+            container.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6"><h3 class="font-bold text-slate-800 mb-2">Custom Field Anggota</h3><p class="text-sm text-slate-500">Kelola field tambahan dinamis untuk data anggota.</p></div>`;
+        }
+
+        function renderUsersView(container) {
+            container.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6"><h3 class="font-bold text-slate-800 mb-2">Manajemen User</h3><p class="text-sm text-slate-500">Daftar pengguna sistem dengan Role-Based Access Control.</p></div>`;
+        }
+
+        function renderAuditView(container) {
+            container.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6"><h3 class="font-bold text-slate-800 mb-2">Audit Log Aktivitas</h3><p class="text-sm text-slate-500">Pencatatan seluruh aktivitas penting pengguna.</p></div>`;
+        }
     </script>
 </body>
 </html>
